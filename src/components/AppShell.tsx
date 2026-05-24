@@ -113,7 +113,7 @@ export default function AppShell() {
   const showDesktopTopLabel = location.pathname !== "/app/quiz" && location.pathname !== "/app/flashcards";
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="h-screen overflow-hidden bg-background flex">
       {/* Sidebar */}
       <aside
         className={cn(
