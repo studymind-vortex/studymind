@@ -121,7 +121,7 @@ Notes:
 
 - The API key is stored in browser local storage for that user/session on that browser.
 - The backend sends credentials using `Authorization: Bearer <key>` and `api-key: <key>` headers.
-- API-key mode now supports OpenAI-compatible APIs directly (no LiteLLM required).
+- API-key mode supports OpenAI-compatible APIs directly (no LiteLLM required).
 
 #### Direct provider examples (no gateway)
 
@@ -251,7 +251,7 @@ supabase db push
 **Option B — SQL Editor (manual)**
 
 1. Open your Supabase project → **SQL Editor**.
-2. Copy the contents of `supabase/migrations/db_queries.sql` and paste it into the editor.
+2. Copy the contents of `supabase/migrations/` and paste it into the editor.
 3. Click **Run**.
 
 This migration creates the following schema:
@@ -340,6 +340,7 @@ Frontend at: `http://localhost:5173`
    ```
    SUPABASE_URL=https://your-project.supabase.co
    SUPABASE_SERVICE_KEY=your-service-role-key
+   FRONTEND_URL=https://your-app.vercel.app
    OLLAMA_URL=https://optional-default-ollama-url
    OPENAI_COMPAT_BASE_PATH=/v1
    OLLAMA_ALLOWED_SUFFIXES=ngrok-free.dev,ngrok.app,trycloudflare.com,openrouter.ai,openai.com,groq.com
@@ -357,6 +358,8 @@ Frontend at: `http://localhost:5173`
    API_FLASHCARD_MODEL=openai/gpt-4o-mini
    API_EMBED_MODEL=openai/text-embedding-3-small
    ```
+
+> ⚠️ **`FRONTEND_URL` is required.** The backend's CORS policy only allows `localhost` origins by default. Without `FRONTEND_URL` set to your Vercel domain, the browser will block all requests from the deployed frontend with a CORS error.
 
 `OLLAMA_URL` is a **default fallback**. Users can override endpoint and mode from the app UI in **Profile -> AI Endpoint**.
 
@@ -398,38 +401,39 @@ Full interactive docs: `https://your-backend.onrender.com/docs`
 
 ### Backend (Render / local)
 
-| Variable | Description |
-|----------|-------------|
-| `SUPABASE_URL` | Your Supabase project URL |
-| `SUPABASE_SERVICE_KEY` | Supabase **service role** key (not the anon key) |
-| `OLLAMA_URL` | Optional default fallback AI endpoint URL. Per-user URL can be set in Profile -> AI Endpoint. |
-| `LOCAL_CHAT_MODEL` | Local mode chat model (Ollama) |
-| `LOCAL_QUIZ_MODEL` | Local mode quiz model (Ollama) |
-| `LOCAL_FLASHCARD_MODEL` | Local mode flashcard model (Ollama) |
-| `LOCAL_EMBED_MODEL` | Local mode embedding model (Ollama) |
-| `API_CHAT_MODEL` | API-key mode chat model (OpenAI-compatible provider) |
-| `API_QUIZ_MODEL` | API-key mode quiz model (OpenAI-compatible provider) |
-| `API_FLASHCARD_MODEL` | API-key mode flashcard model (OpenAI-compatible provider) |
-| `API_EMBED_MODEL` | API-key mode embedding model (OpenAI-compatible provider) |
-| `API_EMBED_DIMENSIONS` | Optional embedding size override for API-key mode (set `768` to match this project's current pgvector schema). |
-| `TTS_ENGINE` | Optional TTS engine selection for the backend (default: `espeak-ng`). |
-| `TTS_VOICE` | Default backend TTS voice name (default: `en-us`). |
-| `TTS_DEFAULT_SPEED` | Default backend TTS playback speed multiplier. |
-| `TTS_MAX_CHARS` | Maximum text length accepted by the backend TTS endpoint. |
-| `OLLAMA_ALLOWED_SUFFIXES` | Optional comma-separated domain suffix allowlist for `x-ollama-url` (e.g., `ngrok-free.dev,trycloudflare.com`). |
-| `OLLAMA_ALLOWED_HOSTS` | Optional comma-separated exact host allowlist for `x-ollama-url` (e.g., `abc-123.ngrok-free.dev,my-tunnel.example.com`). |
-| `OPENAI_COMPAT_BASE_PATH` | Optional base path for API-key mode endpoints (default: `/v1`) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUPABASE_URL` | ✅ | Your Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | ✅ | Supabase **service role** key (not the anon key) |
+| `FRONTEND_URL` | ✅ | Your Vercel frontend URL (e.g. `https://your-app.vercel.app`). Required for CORS — without it, browser requests from the deployed frontend will be blocked. |
+| `OLLAMA_URL` | — | Optional default fallback AI endpoint URL. Per-user URL can be set in Profile -> AI Endpoint. |
+| `LOCAL_CHAT_MODEL` | — | Local mode chat model (Ollama) |
+| `LOCAL_QUIZ_MODEL` | — | Local mode quiz model (Ollama) |
+| `LOCAL_FLASHCARD_MODEL` | — | Local mode flashcard model (Ollama) |
+| `LOCAL_EMBED_MODEL` | — | Local mode embedding model (Ollama) |
+| `API_CHAT_MODEL` | — | API-key mode chat model (OpenAI-compatible provider) |
+| `API_QUIZ_MODEL` | — | API-key mode quiz model (OpenAI-compatible provider) |
+| `API_FLASHCARD_MODEL` | — | API-key mode flashcard model (OpenAI-compatible provider) |
+| `API_EMBED_MODEL` | — | API-key mode embedding model (OpenAI-compatible provider) |
+| `API_EMBED_DIMENSIONS` | — | Optional embedding size override for API-key mode (set `768` to match this project's current pgvector schema). |
+| `TTS_ENGINE` | — | Optional TTS engine selection for the backend (default: `espeak-ng`). |
+| `TTS_VOICE` | — | Default backend TTS voice name (default: `en-us`). |
+| `TTS_DEFAULT_SPEED` | — | Default backend TTS playback speed multiplier. |
+| `TTS_MAX_CHARS` | — | Maximum text length accepted by the backend TTS endpoint. |
+| `OLLAMA_ALLOWED_SUFFIXES` | — | Optional comma-separated domain suffix allowlist for `x-ollama-url` (e.g., `ngrok-free.dev,trycloudflare.com`). |
+| `OLLAMA_ALLOWED_HOSTS` | — | Optional comma-separated exact host allowlist for `x-ollama-url`. |
+| `OPENAI_COMPAT_BASE_PATH` | — | Optional base path for API-key mode endpoints (default: `/v1`) |
 
 When either allowlist variable is set, any user-provided AI endpoint host outside the allowlist is rejected.
 For non-local hosts, the backend also requires `https`.
 
 ### Frontend (Vercel / local)
 
-| Variable | Description |
-|----------|-------------|
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
-| `VITE_RAG_BACKEND_URL` | Backend URL in production; can be `http://localhost:8000` locally |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_SUPABASE_URL` | ✅ | Your Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | ✅ | Supabase anon/public key |
+| `VITE_RAG_BACKEND_URL` | ✅ | Backend URL in production (e.g. `https://your-backend.onrender.com`). Must be set before deploying — Vite bakes this value at build time. |
 
 ### Runtime headers sent by frontend
 
@@ -448,7 +452,8 @@ For non-local hosts, the backend also requires `https`.
 - **Local mode depends on your own machine/tunnel.** If Ollama or ngrok stops, AI requests in local mode will fail.
 - **API key mode requires OpenAI-compatible endpoints.** Providers with non-standard APIs may require backend customization.
 - **Free ngrok URLs are ephemeral** — the URL changes on every restart, so each user must refresh their value in Profile -> AI Endpoint unless they use a static tunnel domain.
-- **Render cold starts** — the free tier spins down after inactivity; the first request may take ~30 seconds to respond.
+- **Render cold starts** — the free tier spins down after ~15 minutes of inactivity; the first request after sleep takes ~30 seconds to respond, which exceeds the 10-second health check timeout. Upgrade to a paid Render instance to avoid this.
+- **`VITE_RAG_BACKEND_URL` is baked at build time** — adding or changing this variable in Vercel requires a redeploy to take effect.
 
 ### Common error: `expected 768 dimensions, not 1536`
 
@@ -459,6 +464,14 @@ Fix:
 1. Set `API_EMBED_DIMENSIONS=768` in Render backend env.
 2. Redeploy backend.
 3. Re-upload the PDF note.
+
+### Common error: `Connection failed — Network error while reaching backend health endpoint`
+
+This means the frontend cannot reach the backend at all. Check in order:
+
+1. **`FRONTEND_URL` not set on Render** — the backend will reject requests from your Vercel domain with a CORS error. Add `FRONTEND_URL=https://your-app.vercel.app` in Render env and restart the service.
+2. **`VITE_RAG_BACKEND_URL` not set or wrong on Vercel** — the frontend falls back to `http://127.0.0.1:8000`, which is unreachable in production. Set the correct Render URL and redeploy.
+3. **Render cold start** — the free tier sleeps after inactivity. Wait ~30 seconds and try again.
 
 ---
 
