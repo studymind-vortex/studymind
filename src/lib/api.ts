@@ -1,11 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getOllamaHeaders } from "@/lib/ollama";
+import { RAG_BACKEND } from "@/lib/constants";
 
 type JsonRecord = Record<string, unknown>;
 
 const BASE = import.meta.env.VITE_SUPABASE_URL as string;
 const ANON = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
-const RAG_BACKEND = import.meta.env.DEV ? "/api/rag" : (import.meta.env.VITE_RAG_BACKEND_URL ?? "http://127.0.0.1:8000");
 
 async function authHeader() {
   const { data: { session } } = await supabase.auth.getSession();

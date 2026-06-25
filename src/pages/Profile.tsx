@@ -195,8 +195,8 @@ export default function Profile() {
       setOllamaUrl(savedEndpoint);
       setApiKey(savedApiKey);
 
-      const ok = await checkBackend();
-      if (ok) {
+      const result = await checkBackend();
+      if (result.ok) {
         toast({
           title: "Connection successful",
           description:
@@ -209,7 +209,7 @@ export default function Profile() {
 
       toast({
         title: "Connection failed",
-        description: "Could not reach the AI backend. Verify endpoint URL, key, and backend status.",
+        description: result.detail || "Could not reach the AI backend. Verify endpoint URL, key, and backend status.",
         variant: "destructive",
       });
     } catch (e: unknown) {

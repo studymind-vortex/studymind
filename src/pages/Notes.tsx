@@ -699,7 +699,7 @@ export default function Notes() {
       const message = error instanceof Error ? error.message : "Query failed.";
       toast({
         title: "Query failed",
-        description: message + " — make sure the RAG backend is running on port 8000.",
+        description: message,
         variant: "destructive",
       });
     } finally {

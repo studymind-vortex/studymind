@@ -18,9 +18,17 @@ load_dotenv(Path(__file__).with_name(".env"))
 
 app = FastAPI(title="StudyMind RAG Backend")
 
+_FRONTEND_URL = os.getenv("FRONTEND_URL", "")
+_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+if _FRONTEND_URL:
+    _CORS_ORIGINS.append(_FRONTEND_URL)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten to your frontend URL in production
+    allow_origins=_CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -69,6 +77,13 @@ API_EMBED_DIMENSIONS = parse_optional_positive_int_env("API_EMBED_DIMENSIONS")
 def parse_csv_env(name: str) -> set[str]:
     raw = os.getenv(name, "")
     return {item.strip().lower() for item in raw.split(",") if item.strip()}
+
+
+def normalize_api_key(raw: str) -> str:
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    return re.sub(r"^Bearer\s+", "", value, flags=re.IGNORECASE).strip()
 
 
 OLLAMA_ALLOWED_HOSTS = parse_csv_env("OLLAMA_ALLOWED_HOSTS")
@@ -217,6 +232,25 @@ def build_openai_compat_url(base_url: str, path: str) -> str:
     return f"{base}{base_path}{normalized_path}"
 
 
+def normalize_openai_compat_model(model: str, ai_url: str) -> str:
+    """
+    Normalize model IDs for OpenRouter-style OpenAI-compatible gateways.
+
+    OpenRouter commonly expects provider-prefixed model names such as
+    `openai/gpt-4o-mini` and `openai/text-embedding-3-small`. If a bare model
+    name is configured, prefix it so the upstream gateway can resolve it.
+    """
+    value = (model or "").strip()
+    if not value:
+        return value
+
+    host = (urlparse(ai_url).hostname or "").strip().lower()
+    if host.endswith("openrouter.ai") and "/" not in value:
+        return f"openai/{value}"
+
+    return value
+
+
 def get_mode_models(api_key_mode: bool) -> dict[str, str]:
     if api_key_mode:
         return {
@@ -233,14 +267,25 @@ def get_mode_models(api_key_mode: bool) -> dict[str, str]:
     }
 
 
-def get_upstream_ai_headers(request: Request) -> dict[str, str]:
-    api_key = (request.headers.get("x-ollama-api-key") or "").strip()
+def get_upstream_ai_headers(request: Request, api_key_mode: bool = False, ai_url: str = "") -> dict[str, str]:
+    api_key = normalize_api_key(request.headers.get("x-ollama-api-key") or "")
+    if api_key_mode and not api_key:
+        raise HTTPException(
+            400,
+            "API key mode is enabled, but no API key was provided. Save an API key in Profile -> AI Endpoint.",
+        )
     if not api_key:
         return {}
-    return {
-        "Authorization": f"Bearer {api_key}",
-        "api-key": api_key,
-    }
+
+    host = (urlparse(ai_url).hostname or "").strip().lower() if ai_url else ""
+    is_azure_openai = host.endswith("openai.azure.com") or host.endswith("cognitiveservices.azure.com")
+
+    # Azure OpenAI expects api-key, while OpenAI/OpenRouter/Groq-compatible gateways
+    # typically expect Authorization: Bearer.
+    if is_azure_openai:
+        return {"api-key": api_key}
+
+    return {"Authorization": f"Bearer {api_key}"}
 
 
 def get_current_user_id(request: Request) -> str:
@@ -274,7 +319,7 @@ async def get_embedding(
 ) -> list[float]:
     """Call embeddings API for either Ollama or OpenAI-compatible providers."""
     try:
-        payload = {"model": embed_model}
+        payload = {"model": normalize_openai_compat_model(embed_model, ai_url)}
         endpoint = f"{ai_url}/api/embeddings"
         if api_key_mode:
             endpoint = build_openai_compat_url(ai_url, "/embeddings")
@@ -305,8 +350,20 @@ async def get_embedding(
                 return data["embedding"]
             raise HTTPException(502, "Ollama embeddings response missing embedding")
     except httpx.RequestError as e:
+        if api_key_mode:
+            # Fall back to local embeddings if API mode fails
+            try:
+                return await get_embedding(text, LOCAL_EMBED_MODEL, validate_ollama_endpoint(OLLAMA_URL), None, False)
+            except Exception:
+                raise HTTPException(503, f"Could not reach AI endpoint at {ai_url}: {e}") from e
         raise HTTPException(503, f"Could not reach AI endpoint at {ai_url}: {e}") from e
     except httpx.HTTPStatusError as e:
+        if api_key_mode:
+            # Fall back to local embeddings if API embeddings model not available
+            try:
+                return await get_embedding(text, LOCAL_EMBED_MODEL, validate_ollama_endpoint(OLLAMA_URL), None, False)
+            except Exception:
+                raise HTTPException(502, f"Embeddings request failed ({e.response.status_code}): {e.response.text[:300]}") from e
         raise HTTPException(502, f"Embeddings request failed ({e.response.status_code}): {e.response.text[:300]}") from e
 
 
@@ -323,7 +380,7 @@ async def generate_text(
         if api_key_mode:
             endpoint = build_openai_compat_url(ai_url, "/chat/completions")
             payload = {
-                "model": model,
+                "model": normalize_openai_compat_model(model, ai_url),
                 "messages": [
                     {"role": "user", "content": prompt},
                 ],
@@ -428,21 +485,34 @@ def health():
     }
 
 
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "message": "StudyMind RAG backend is running",
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+
 @app.get("/ai-health")
 async def ai_health(request: Request):
     ai_url = resolve_ollama_url(request)
     api_key_mode = is_api_key_mode(request)
-    upstream_headers = get_upstream_ai_headers(request)
+    upstream_headers = get_upstream_ai_headers(request, api_key_mode, ai_url)
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
             if api_key_mode:
-                health_url = build_openai_compat_url(ai_url, "/models")
+                # Lightweight probe: GET /models costs zero tokens and confirms
+                # the key is valid and the endpoint is reachable.
+                models_url = build_openai_compat_url(ai_url, "/models")
+                models_res = await client.get(models_url, headers=upstream_headers or None)
+                models_res.raise_for_status()
             else:
                 health_url = f"{ai_url}/api/tags"
-
-            res = await client.get(health_url, headers=upstream_headers or None)
-            res.raise_for_status()
+                res = await client.get(health_url, headers=upstream_headers or None)
+                res.raise_for_status()
     except httpx.RequestError as e:
         raise HTTPException(503, f"Could not reach AI endpoint at {ai_url}: {e}") from e
     except httpx.HTTPStatusError as e:
@@ -502,7 +572,7 @@ async def upload_pdf(
     ai_url = resolve_ollama_url(request)
     api_key_mode = is_api_key_mode(request)
     mode_models = get_mode_models(api_key_mode)
-    upstream_headers = get_upstream_ai_headers(request)
+    upstream_headers = get_upstream_ai_headers(request, api_key_mode, ai_url)
 
     # Delete any existing chunks for this note (re-upload scenario)
     try:
@@ -592,7 +662,7 @@ async def query_rag(req: QueryRequest, request: Request):
     api_key_mode = is_api_key_mode(request)
     mode_models = get_mode_models(api_key_mode)
     model = req.model or mode_models["chat"]
-    upstream_headers = get_upstream_ai_headers(request)
+    upstream_headers = get_upstream_ai_headers(request, api_key_mode, ai_url)
 
     sources = []
 
@@ -657,7 +727,7 @@ async def generate_quiz(req: QuizRequest, request: Request):
     api_key_mode = is_api_key_mode(request)
     mode_models = get_mode_models(api_key_mode)
     model = req.model or mode_models["quiz"]
-    upstream_headers = get_upstream_ai_headers(request)
+    upstream_headers = get_upstream_ai_headers(request, api_key_mode, ai_url)
 
     prompt = f"""Generate {count} multiple-choice quiz questions from the study material below.
 Return ONLY valid JSON in this exact shape:
@@ -775,7 +845,7 @@ async def generate_flashcards(req: FlashcardsRequest, request: Request):
     api_key_mode = is_api_key_mode(request)
     mode_models = get_mode_models(api_key_mode)
     model = req.model or mode_models["flashcard"]
-    upstream_headers = get_upstream_ai_headers(request)
+    upstream_headers = get_upstream_ai_headers(request, api_key_mode, ai_url)
 
     prompt = f"""Generate {count} high-quality study flashcards from the material below.
 Return ONLY valid JSON in this exact shape:
@@ -837,7 +907,7 @@ async def summarize_note(req: SummaryRequest, request: Request):
     api_key_mode = is_api_key_mode(request)
     mode_models = get_mode_models(api_key_mode)
     model = req.model or mode_models["chat"]
-    upstream_headers = get_upstream_ai_headers(request)
+    upstream_headers = get_upstream_ai_headers(request, api_key_mode, ai_url)
 
     if mode == "eli5":
         prompt = f"""You are helping a student understand a topic like they are 10 years old.
