@@ -1,8 +1,11 @@
 import { getOllamaHeaders } from "@/lib/ollama";
+import { RAG_BACKEND as BACKEND } from "@/lib/constants";
 
-const BACKEND = import.meta.env.DEV
-  ? "/api/rag"
-  : (import.meta.env.VITE_RAG_BACKEND_URL ?? "http://127.0.0.1:8000");
+export type AiHealthResult = {
+  ok: boolean;
+  status?: number;
+  detail?: string;
+};
 
 export async function uploadPdf(
   file: File,
@@ -47,14 +50,32 @@ export async function queryRag(
   return res.json();
 }
 
-export async function checkBackend(): Promise<boolean> {
+export async function checkBackend(): Promise<AiHealthResult> {
   try {
     const res = await fetch(`${BACKEND}/ai-health`, {
       signal: AbortSignal.timeout(10000),
       headers: getOllamaHeaders(),
     });
-    return res.ok;
+
+    if (res.ok) {
+      return { ok: true, status: res.status };
+    }
+
+    const raw = await res.text().catch(() => "");
+    let detail = raw || `Request failed (${res.status})`;
+    try {
+      const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+      detail = typeof parsed.detail === "string"
+        ? parsed.detail
+        : typeof parsed.error === "string"
+          ? parsed.error
+          : detail;
+    } catch {
+      // Keep fallback detail.
+    }
+
+    return { ok: false, status: res.status, detail };
   } catch {
-    return false;
+    return { ok: false, detail: "Network error while reaching backend health endpoint." };
   }
 }

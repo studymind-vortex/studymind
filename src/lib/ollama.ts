@@ -19,7 +19,9 @@ function isValidHttpUrl(url: string): boolean {
 }
 
 function normalizeApiKey(value: string): string {
-  return value.trim();
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/^Bearer\s+/i, "").trim();
 }
 
 function normalizeAiMode(mode: string): AiMode {
@@ -29,6 +31,11 @@ function normalizeAiMode(mode: string): AiMode {
 export function getStoredOllamaUrl(): string {
   if (typeof window === "undefined") return DEFAULT_OLLAMA_URL;
   return window.localStorage.getItem(OLLAMA_URL_STORAGE_KEY) ?? DEFAULT_OLLAMA_URL;
+}
+
+function getConfiguredOllamaUrl(): string {
+  if (typeof window === "undefined") return "";
+  return (window.localStorage.getItem(OLLAMA_URL_STORAGE_KEY) ?? "").trim();
 }
 
 export function getStoredAiMode(): AiMode {
@@ -101,14 +108,17 @@ export function setStoredOllamaUrl(rawUrl: string): string {
 
 export function getOllamaHeaders(): Record<string, string> {
   const mode = getStoredAiMode();
-  const url = getStoredOllamaUrl().trim();
+  const configuredUrl = getConfiguredOllamaUrl();
   if (mode === "local") {
-    if (!url) return {};
-    return { "x-ollama-url": url };
+    // Do not inject a default API endpoint in local mode.
+    // If users did not explicitly configure a local endpoint, backend fallback is used.
+    if (!configuredUrl) return {};
+    return { "x-ollama-url": configuredUrl };
   }
 
   const apiKey = getStoredApiKey().trim();
   const headers: Record<string, string> = { "x-ai-mode": "api-key" };
+  const url = configuredUrl || DEFAULT_OLLAMA_URL;
   if (url) headers["x-ollama-url"] = url;
   if (apiKey) headers["x-ollama-api-key"] = apiKey;
   return headers;

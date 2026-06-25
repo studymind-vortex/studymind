@@ -137,7 +137,7 @@ Use one of these backend model setups:
 API_CHAT_MODEL=openai/gpt-4o-mini
 API_QUIZ_MODEL=openai/gpt-4o-mini
 API_FLASHCARD_MODEL=openai/gpt-4o-mini
-API_EMBED_MODEL=text-embedding-3-small
+API_EMBED_MODEL=openai/text-embedding-3-small
 ```
 
 2. **Both local mode and API-key mode (recommended)**
@@ -153,7 +153,7 @@ LOCAL_EMBED_MODEL=nomic-embed-text
 API_CHAT_MODEL=openai/gpt-4o-mini
 API_QUIZ_MODEL=openai/gpt-4o-mini
 API_FLASHCARD_MODEL=openai/gpt-4o-mini
-API_EMBED_MODEL=text-embedding-3-small
+API_EMBED_MODEL=openai/text-embedding-3-small
 API_EMBED_DIMENSIONS=768
 ```
 
@@ -355,7 +355,7 @@ Frontend at: `http://localhost:5173`
    API_CHAT_MODEL=openai/gpt-4o-mini
    API_QUIZ_MODEL=openai/gpt-4o-mini
    API_FLASHCARD_MODEL=openai/gpt-4o-mini
-   API_EMBED_MODEL=text-embedding-3-small
+   API_EMBED_MODEL=openai/text-embedding-3-small
    ```
 
 `OLLAMA_URL` is a **default fallback**. Users can override endpoint and mode from the app UI in **Profile -> AI Endpoint**.
