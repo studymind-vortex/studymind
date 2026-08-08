@@ -447,7 +447,7 @@ For non-local hosts, the backend also requires `https`.
 
 ---
 
-## ⚠️ Known Limitations
+## Known Limitations
 
 - **Local mode depends on your own machine/tunnel.** If Ollama or ngrok stops, AI requests in local mode will fail.
 - **API key mode requires OpenAI-compatible endpoints.** Providers with non-standard APIs may require backend customization.
@@ -475,6 +475,6 @@ This means the frontend cannot reach the backend at all. Check in order:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License. See the full text in [LICENSE](./LICENSE).
