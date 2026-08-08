@@ -315,7 +315,7 @@ Frontend at: `http://localhost:5173`
 
 ---
 
-## 🌐 Production Deployment
+## Production Deployment
 
 ### Frontend → Vercel
 
@@ -397,7 +397,7 @@ Full interactive docs: `https://your-backend.onrender.com/docs`
 
 ---
 
-## ⚙️ Environment Variables
+## Environment Variables
 
 ### Backend (Render / local)
 
